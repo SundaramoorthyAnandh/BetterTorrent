@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- progress ring track -->
+    <path
+        android:pathData="M54,32a22,22 0,1 1,0 44a22,22 0,1 1,0 -44"
+        android:strokeWidth="5"
+        android:strokeColor="#59FFFFFF"
+        android:fillColor="#00000000" />
+    <!-- progress ring (75%) -->
+    <path
+        android:pathData="M54,32A22,22 0,1 1,32 54"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:strokeColor="#FFFFFFFF"
+        android:fillColor="#00000000" />
+    <!-- play triangle -->
+    <path
+        android:pathData="M48.5,44.2L48.5,63.8Q48.5,66 50.4,64.9L64.6,55.9Q66.4,54.8 64.6,53.7L50.4,44.6Q48.5,43.5 48.5,44.2Z"
+        android:fillColor="#FFFFFFFF" />
+</vector>
