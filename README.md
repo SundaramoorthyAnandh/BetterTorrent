@@ -6,7 +6,7 @@ Downloads work like [Seedr](https://www.seedr.cc): torrents land in the app's ow
 
 ## Install
 
-1. Download [`dist/BetterTorrent-1.2.0.apk`](dist/BetterTorrent-1.2.0.apk) on your phone.
+1. Download [`dist/BetterTorrent-1.3.0.apk`](dist/BetterTorrent-1.2.0.apk) on your phone.
 2. Open it. Android asks you to allow installs from your browser or file manager. Allow it, then tap **Install**.
 
 Requires Android 10 or newer (arm64, armv7 and x86_64).
@@ -22,7 +22,9 @@ Requires Android 10 or newer (arm64, armv7 and x86_64).
 - [x] **Open in VLC / MX Player** or any cast app, via a local stream URL
 - [x] **Subtitles**: from the torrent (`.srt`, `.vtt`, `.ass`, `.ssa`), from the phone, or tracks built into the video
 - [x] **Magnet / .torrent handler**: tap a magnet link anywhere, open `.torrent` files, share links to the app, and get an offer to add a magnet you just copied
-- [x] **Settings**: separate "Download on Wi‑Fi" and "Download on mobile data" switches, speed limits, download folder, max active downloads, seeding, theme (System/Light/Dark plus Material You), default player
+- [x] **Settings**: separate "Download on Wi‑Fi" and "Download on mobile data" switches, speed limits, download folder, max active downloads, seeding, theme (System/Light/Dark plus Material You), font, default player
+
+- [x] **Fonts**: System default, sans (Inter, Poppins, Nunito, Manrope) or serif (Lora, Merriweather, Source Serif 4, Literata). All are bundled, so they work offline
 
 ## How it works
 
@@ -47,6 +49,8 @@ You need JDK 17 or newer and the Android SDK (platform 36). `StreamServerTest` r
 **Signing:** without a key, release builds are signed with the debug key. To sign with your own key (needed so updates install over older builds), add a `keystore.properties` file (`storeFile`, `storePassword`, `keyAlias`, `keyPassword`) or set the `BT_*` secrets used by `.github/workflows/android.yml`.
 
 ## Notes
+
+- Fonts are under the SIL Open Font License 1.1 (texts in `app/src/main/assets/licenses/fonts`, also shown in Settings → Font licenses). Inter, Poppins, Nunito, Manrope, Source Serif 4 and Literata are trimmed to Latin characters and four weights. Lora and Merriweather have Reserved Font Names, so they ship unmodified.
 
 - Only download content you have the right to share.
 - The built-in player handles what the phone's decoders support. For formats it can't play (for example some DTS/AC3 audio), use **Open in another player**.

@@ -98,7 +98,7 @@ class MainActivity : ComponentActivity(), AppActions {
 
         setContent {
             val settings by vm.settings.collectAsStateWithLifecycle()
-            BetterTorrentTheme(themeMode = settings.themeMode, dynamicColor = settings.dynamicColor) {
+            BetterTorrentTheme(themeMode = settings.themeMode, dynamicColor = settings.dynamicColor, font = settings.font) {
                 CompositionLocalProvider(LocalAppActions provides this) {
                     AppRoot(vm)
                 }

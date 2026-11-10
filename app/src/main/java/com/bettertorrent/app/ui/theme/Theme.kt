@@ -12,6 +12,10 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import com.bettertorrent.app.data.AppFont
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -82,11 +86,26 @@ private val AppShapes = Shapes(
     extraLarge = RoundedCornerShape(32.dp),
 )
 
-private val AppTypography = Typography().let { t ->
-    t.copy(
-        titleLarge = t.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-        titleMedium = t.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-        titleSmall = t.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+/** Material 3 type scale with semibold titles, in the chosen font. */
+fun appTypography(family: FontFamily): Typography {
+    val t = Typography()
+    fun TextStyle.f(weight: FontWeight? = null) = copy(fontFamily = family, fontWeight = weight ?: fontWeight)
+    return Typography(
+        displayLarge = t.displayLarge.f(),
+        displayMedium = t.displayMedium.f(),
+        displaySmall = t.displaySmall.f(),
+        headlineLarge = t.headlineLarge.f(),
+        headlineMedium = t.headlineMedium.f(),
+        headlineSmall = t.headlineSmall.f(),
+        titleLarge = t.titleLarge.f(FontWeight.SemiBold),
+        titleMedium = t.titleMedium.f(FontWeight.SemiBold),
+        titleSmall = t.titleSmall.f(FontWeight.SemiBold),
+        bodyLarge = t.bodyLarge.f(),
+        bodyMedium = t.bodyMedium.f(),
+        bodySmall = t.bodySmall.f(),
+        labelLarge = t.labelLarge.f(),
+        labelMedium = t.labelMedium.f(),
+        labelSmall = t.labelSmall.f(),
     )
 }
 
@@ -94,6 +113,7 @@ private val AppTypography = Typography().let { t ->
 fun BetterTorrentTheme(
     themeMode: ThemeMode = ThemeMode.SYSTEM,
     dynamicColor: Boolean = true,
+    font: AppFont = AppFont.SYSTEM,
     content: @Composable () -> Unit,
 ) {
     val dark = when (themeMode) {
@@ -108,11 +128,13 @@ fun BetterTorrentTheme(
         dark -> DarkColors
         else -> LightColors
     }
-    MaterialTheme(colorScheme = scheme, shapes = AppShapes, typography = AppTypography, content = content)
+    val typography = remember(font) { appTypography(AppFonts.family(font)) }
+    MaterialTheme(colorScheme = scheme, shapes = AppShapes, typography = typography, content = content)
 }
 
 /** Always-dark scheme for the video player. */
 @Composable
-fun PlayerTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = DarkColors, shapes = AppShapes, typography = AppTypography, content = content)
+fun PlayerTheme(font: AppFont = AppFont.SYSTEM, content: @Composable () -> Unit) {
+    val typography = remember(font) { appTypography(AppFonts.family(font)) }
+    MaterialTheme(colorScheme = DarkColors, shapes = AppShapes, typography = typography, content = content)
 }

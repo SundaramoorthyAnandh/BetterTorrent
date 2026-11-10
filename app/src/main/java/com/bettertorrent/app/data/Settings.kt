@@ -18,6 +18,19 @@ enum class ThemeMode { SYSTEM, LIGHT, DARK }
 enum class DownloadLocation { APP, PUBLIC }
 enum class PlayerChoice { BUILT_IN, ASK }
 
+/** App-wide typeface. SYSTEM follows the phone's own font. All others are bundled, SIL OFL 1.1. */
+enum class AppFont(val label: String, val serif: Boolean) {
+    SYSTEM("System default", false),
+    INTER("Inter", false),
+    POPPINS("Poppins", false),
+    NUNITO("Nunito", false),
+    MANROPE("Manrope", false),
+    LORA("Lora", true),
+    MERRIWEATHER("Merriweather", true),
+    SOURCE_SERIF("Source Serif 4", true),
+    LITERATA("Literata", true),
+}
+
 data class AppSettings(
     val downloadLimitKb: Int = 0,
     val uploadLimitKb: Int = 0,
@@ -29,6 +42,7 @@ data class AppSettings(
     val seedAfterComplete: Boolean = false,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val dynamicColor: Boolean = true,
+    val font: AppFont = AppFont.SYSTEM,
     val clipboardDetect: Boolean = true,
     val player: PlayerChoice = PlayerChoice.BUILT_IN,
     /** The battery-optimization exemption dialog has been shown once. */
@@ -57,6 +71,7 @@ class SettingsRepository(private val context: Context) {
         val seed = booleanPreferencesKey("seed_after_complete")
         val theme = stringPreferencesKey("theme_mode")
         val dynamic = booleanPreferencesKey("dynamic_color")
+        val font = stringPreferencesKey("font")
         val clipboard = booleanPreferencesKey("clipboard_detect")
         val player = stringPreferencesKey("player")
     }
@@ -83,6 +98,7 @@ class SettingsRepository(private val context: Context) {
             seedAfterComplete = p[Keys.seed] ?: d.seedAfterComplete,
             themeMode = enumOr(p[Keys.theme], d.themeMode),
             dynamicColor = p[Keys.dynamic] ?: d.dynamicColor,
+            font = enumOr(p[Keys.font], d.font),
             clipboardDetect = p[Keys.clipboard] ?: d.clipboardDetect,
             player = enumOr(p[Keys.player], d.player),
             batteryPromptShown = p[Keys.batteryPrompt] ?: d.batteryPromptShown,
@@ -105,6 +121,7 @@ class SettingsRepository(private val context: Context) {
         p[Keys.seed] = s.seedAfterComplete
         p[Keys.theme] = s.themeMode.name
         p[Keys.dynamic] = s.dynamicColor
+        p[Keys.font] = s.font.name
         p[Keys.clipboard] = s.clipboardDetect
         p[Keys.player] = s.player.name
     }

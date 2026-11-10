@@ -33,6 +33,13 @@ import androidx.compose.material.icons.rounded.BatteryChargingFull
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.SignalCellularAlt
 import androidx.compose.material.icons.rounded.Warning
+import androidx.compose.material.icons.rounded.TextFields
+import androidx.compose.material.icons.rounded.Gavel
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import com.bettertorrent.app.data.AppFont
+import com.bettertorrent.app.ui.theme.AppFonts
 import androidx.compose.material.icons.rounded.RestartAlt
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
@@ -86,6 +93,8 @@ fun SettingsScreen(vm: MainViewModel) {
     val actions = LocalAppActions.current
     var locationDialog by remember { mutableStateOf(false) }
     var limitDialog by remember { mutableStateOf<LimitKind?>(null) }
+    var fontDialog by remember { mutableStateOf(false) }
+    var licensesDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
     var batteryExempt by remember { mutableStateOf(BatteryOptimization.isExempt(context)) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { batteryExempt = BatteryOptimization.isExempt(context) }
@@ -238,6 +247,16 @@ fun SettingsScreen(vm: MainViewModel) {
                     onSelect = { i -> vm.updateSettings { it.copy(themeMode = ThemeMode.entries[i]) } },
                 )
             }
+            item {
+                ListItem(
+                    modifier = Modifier.clickable { fontDialog = true },
+                    leadingContent = { Icon(Icons.Rounded.TextFields, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+                    headlineContent = { Text("Font") },
+                    supportingContent = {
+                        Text(s.font.label, fontFamily = AppFonts.family(s.font))
+                    },
+                )
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 item {
                     SwitchRow(
@@ -269,7 +288,30 @@ fun SettingsScreen(vm: MainViewModel) {
                     subtitle = "Engine: libtorrent ${runCatching { LibTorrent.version() }.getOrDefault("?")}",
                 )
             }
+            item {
+                SettingRow(
+                    icon = Icons.Rounded.Gavel,
+                    title = "Font licenses",
+                    subtitle = "Bundled fonts are free under the SIL Open Font License 1.1",
+                    onClick = { licensesDialog = true },
+                )
+            }
         }
+    }
+
+    if (fontDialog) {
+        FontDialog(
+            current = s.font,
+            onSelect = { f ->
+                vm.updateSettings { it.copy(font = f) }
+                fontDialog = false
+            },
+            onDismiss = { fontDialog = false },
+        )
+    }
+
+    if (licensesDialog) {
+        FontLicensesDialog(onDismiss = { licensesDialog = false })
     }
 
     if (locationDialog) {
@@ -467,5 +509,83 @@ private fun SpeedLimitDialog(title: String, currentKb: Int, onSave: (Int) -> Uni
             }) { Text("Save limit") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+@Composable
+private fun FontDialog(current: AppFont, onSelect: (AppFont) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Font") },
+        text = {
+            LazyColumn(Modifier.heightIn(max = 460.dp)) {
+                item { FontOption(AppFont.SYSTEM, current, "Uses your phone's font", onSelect) }
+                item { FontGroupLabel("Sans serif") }
+                AppFont.entries.filter { it != AppFont.SYSTEM && !it.serif }.forEach { f ->
+                    item(key = f.name) { FontOption(f, current, null, onSelect) }
+                }
+                item { FontGroupLabel("Serif") }
+                AppFont.entries.filter { it.serif }.forEach { f ->
+                    item(key = f.name) { FontOption(f, current, null, onSelect) }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+    )
+}
+
+@Composable
+private fun FontGroupLabel(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
+    )
+}
+
+@Composable
+private fun FontOption(font: AppFont, current: AppFont, note: String?, onSelect: (AppFont) -> Unit) {
+    val family = AppFonts.family(font)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .selectable(selected = font == current, onClick = { onSelect(font) }, role = Role.RadioButton)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(selected = font == current, onClick = null, modifier = Modifier.padding(end = 12.dp))
+        Column {
+            Text(font.label, style = MaterialTheme.typography.titleMedium, fontFamily = family)
+            Text(
+                note ?: "Downloading · 1.2 GB of 4.5 GB",
+                style = MaterialTheme.typography.bodySmall,
+                fontFamily = family,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun FontLicensesDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val text = remember {
+        AppFonts.licenseFiles.joinToString("\n\n") { (name, file) ->
+            val body = runCatching {
+                context.assets.open("licenses/fonts/$file").bufferedReader().use { it.readText() }
+            }.getOrDefault("SIL Open Font License 1.1")
+            "── $name ──\n\n$body"
+        }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Font licenses") },
+        text = {
+            Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState())) {
+                Text(text, style = MaterialTheme.typography.bodySmall)
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
     )
 }
