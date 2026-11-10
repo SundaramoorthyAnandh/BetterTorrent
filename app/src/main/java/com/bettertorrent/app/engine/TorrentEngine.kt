@@ -1,17 +1,11 @@
 package com.bettertorrent.app.engine
 
-import android.Manifest
 import android.content.Context
-import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
-import android.os.Build
-import android.os.Environment
 import android.util.Log
-import androidx.core.content.ContextCompat
 import com.bettertorrent.app.data.AppSettings
-import com.bettertorrent.app.data.DownloadLocation
 import com.bettertorrent.app.data.SettingsRepository
 import com.bettertorrent.app.util.FileKind
 import com.bettertorrent.app.util.FileKinds
@@ -465,7 +459,7 @@ class TorrentEngine(
             }
 
             val ti = TorrentInfo(preview.torrentBytes)
-            val saveDir = currentDownloadDir().apply { mkdirs() }
+            val saveDir = downloadDir().apply { mkdirs() }
             val priorities = Array(ti.numFiles()) { if (it in selected) Priority.DEFAULT else Priority.IGNORE }
             store.saveTorrentBytes(hash, preview.torrentBytes)
             val meta = TorrentMeta(
@@ -714,33 +708,15 @@ class TorrentEngine(
 
     // ---------------------------------------------------------------- library support
 
-    fun downloadDir(location: DownloadLocation): File = when (location) {
-        DownloadLocation.APP -> File(context.getExternalFilesDir(null) ?: context.filesDir, "Downloads")
-        DownloadLocation.PUBLIC -> File(
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-            "BetterTorrent",
-        )
-    }
+    /**
+     * Where torrents download: the app's own storage, like a personal Seedr cloud.
+     * No storage permission needed; Library → "Save to phone Downloads" exports files.
+     */
+    fun downloadDir(): File = File(context.getExternalFilesDir(null) ?: context.filesDir, "Downloads")
 
-    fun canUsePublicFolder(): Boolean =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            Environment.isExternalStorageManager()
-        } else {
-            ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) ==
-                PackageManager.PERMISSION_GRANTED
-        }
-
-    fun currentDownloadDir(): File =
-        if (settings.location == DownloadLocation.PUBLIC && canUsePublicFolder()) {
-            downloadDir(DownloadLocation.PUBLIC)
-        } else {
-            downloadDir(DownloadLocation.APP)
-        }
-
-    /** Folders the Library can browse: app storage, plus the public folder when usable. */
+    /** Folders the Library can browse: app storage plus any older torrent save folders. */
     fun libraryRoots(): List<File> {
-        val roots = mutableListOf(downloadDir(DownloadLocation.APP))
-        if (canUsePublicFolder()) roots += downloadDir(DownloadLocation.PUBLIC)
+        val roots = mutableListOf(downloadDir())
         metas.values.map { File(it.savePath) }.forEach { if (roots.none { r -> canonical(r) == canonical(it) }) roots += it }
         return roots
     }

@@ -172,7 +172,7 @@ fun LibraryScreen(onGoToTransfers: () -> Unit, vm: LibraryViewModel = viewModel(
                 LibraryRow(
                     entry = entry,
                     exportProgress = exporting[entry.file.absolutePath],
-                    canExport = !vm.isPublicRoot(),
+                    canExport = true,
                     onClick = {
                         when {
                             entry.isDir -> vm.open(entry.file)

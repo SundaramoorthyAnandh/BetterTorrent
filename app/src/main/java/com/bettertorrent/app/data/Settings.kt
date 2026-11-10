@@ -15,7 +15,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
-enum class DownloadLocation { APP, PUBLIC }
 enum class PlayerChoice { BUILT_IN, ASK }
 
 /** App-wide typeface. SYSTEM follows the phone's own font. All others are bundled, SIL OFL 1.1. */
@@ -38,7 +37,6 @@ data class AppSettings(
     val downloadOnWifi: Boolean = true,
     val downloadOnMobile: Boolean = true,
     val maxActiveDownloads: Int = 3,
-    val location: DownloadLocation = DownloadLocation.APP,
     val seedAfterComplete: Boolean = false,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val dynamicColor: Boolean = true,
@@ -67,7 +65,6 @@ class SettingsRepository(private val context: Context) {
         val oemGuide = booleanPreferencesKey("oem_guide_shown")
         val resumeAfterReboot = booleanPreferencesKey("resume_after_reboot")
         val maxActive = intPreferencesKey("max_active_downloads")
-        val location = stringPreferencesKey("download_location")
         val seed = booleanPreferencesKey("seed_after_complete")
         val theme = stringPreferencesKey("theme_mode")
         val dynamic = booleanPreferencesKey("dynamic_color")
@@ -94,7 +91,6 @@ class SettingsRepository(private val context: Context) {
             // Migrate the old "Download only on Wi‑Fi" switch.
             downloadOnMobile = p[Keys.onMobile] ?: p[Keys.legacyWifiOnly]?.not() ?: d.downloadOnMobile,
             maxActiveDownloads = p[Keys.maxActive] ?: d.maxActiveDownloads,
-            location = enumOr(p[Keys.location], d.location),
             seedAfterComplete = p[Keys.seed] ?: d.seedAfterComplete,
             themeMode = enumOr(p[Keys.theme], d.themeMode),
             dynamicColor = p[Keys.dynamic] ?: d.dynamicColor,
@@ -117,7 +113,6 @@ class SettingsRepository(private val context: Context) {
         p[Keys.oemGuide] = s.oemGuideShown
         p[Keys.resumeAfterReboot] = s.resumeAfterReboot
         p[Keys.maxActive] = s.maxActiveDownloads
-        p[Keys.location] = s.location.name
         p[Keys.seed] = s.seedAfterComplete
         p[Keys.theme] = s.themeMode.name
         p[Keys.dynamic] = s.dynamicColor

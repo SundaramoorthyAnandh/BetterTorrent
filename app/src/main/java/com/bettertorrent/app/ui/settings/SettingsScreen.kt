@@ -76,7 +76,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bettertorrent.app.BuildConfig
-import com.bettertorrent.app.data.DownloadLocation
 import com.bettertorrent.app.data.PlayerChoice
 import com.bettertorrent.app.data.ThemeMode
 import com.bettertorrent.app.ui.LocalAppActions
@@ -91,7 +90,6 @@ private enum class LimitKind { DOWNLOAD, UPLOAD }
 fun SettingsScreen(vm: MainViewModel) {
     val s by vm.settings.collectAsStateWithLifecycle()
     val actions = LocalAppActions.current
-    var locationDialog by remember { mutableStateOf(false) }
     var limitDialog by remember { mutableStateOf<LimitKind?>(null) }
     var fontDialog by remember { mutableStateOf(false) }
     var licensesDialog by remember { mutableStateOf(false) }
@@ -114,8 +112,7 @@ fun SettingsScreen(vm: MainViewModel) {
                 SettingRow(
                     icon = Icons.Rounded.Folder,
                     title = "Download location",
-                    subtitle = if (s.location == DownloadLocation.PUBLIC) "Downloads/BetterTorrent (visible to other apps)" else "App storage (private)",
-                    onClick = { locationDialog = true },
+                    subtitle = "App storage, private to BetterTorrent. Use Library → Save to phone Downloads to export files.",
                 )
             }
             item {
@@ -314,28 +311,6 @@ fun SettingsScreen(vm: MainViewModel) {
         FontLicensesDialog(onDismiss = { licensesDialog = false })
     }
 
-    if (locationDialog) {
-        LocationDialog(
-            current = s.location,
-            onSelect = { loc ->
-                locationDialog = false
-                if (loc == DownloadLocation.PUBLIC) {
-                    actions.requestAllFilesAccess { granted ->
-                        if (granted) {
-                            vm.updateSettings { it.copy(location = DownloadLocation.PUBLIC) }
-                            vm.message("New downloads go to Downloads/BetterTorrent")
-                        } else {
-                            vm.message("All files access wasn't granted, so downloads stay in app storage.")
-                        }
-                    }
-                } else {
-                    vm.updateSettings { it.copy(location = DownloadLocation.APP) }
-                }
-            },
-            onDismiss = { locationDialog = false },
-        )
-    }
-
     limitDialog?.let { kind ->
         SpeedLimitDialog(
             title = if (kind == LimitKind.DOWNLOAD) "Download speed limit" else "Upload speed limit",
@@ -411,55 +386,6 @@ private fun ChoiceRow(
                     shape = SegmentedButtonDefaults.itemShape(index = i, count = options.size),
                 ) { Text(label, maxLines = 1) }
             }
-        }
-    }
-}
-
-@Composable
-private fun LocationDialog(current: DownloadLocation, onSelect: (DownloadLocation) -> Unit, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Download location") },
-        text = {
-            Column {
-                LocationOption(
-                    selected = current == DownloadLocation.APP,
-                    title = "App storage",
-                    body = "Private to BetterTorrent, like your own Seedr cloud. Use Library → Save to phone Downloads to export files.",
-                    onClick = { onSelect(DownloadLocation.APP) },
-                )
-                Spacer(Modifier.height(8.dp))
-                LocationOption(
-                    selected = current == DownloadLocation.PUBLIC,
-                    title = "Downloads/BetterTorrent",
-                    body = "Files are visible to gallery and file manager apps. Needs “All files access”.",
-                    onClick = { onSelect(DownloadLocation.PUBLIC) },
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "Applies to new torrents. Existing ones stay where they are.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
-    )
-}
-
-@Composable
-private fun LocationOption(selected: Boolean, title: String, body: String, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .selectable(selected = selected, onClick = onClick, role = Role.RadioButton)
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.Top,
-    ) {
-        RadioButton(selected = selected, onClick = null, modifier = Modifier.padding(top = 2.dp, end = 12.dp))
-        Column {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
-            Text(body, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
