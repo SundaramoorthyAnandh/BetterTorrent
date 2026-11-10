@@ -31,6 +31,7 @@ import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SignalCellularOff
 import androidx.compose.material.icons.rounded.WifiOff
+import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -88,6 +89,7 @@ fun TransfersScreen(vm: MainViewModel, onOpenTorrent: (String) -> Unit) {
     val torrents by vm.torrents.collectAsStateWithLifecycle()
     val stats by vm.stats.collectAsStateWithLifecycle()
     val clipboardMagnet by vm.clipboardMagnet.collectAsStateWithLifecycle()
+    val killAlert by vm.killAlert.collectAsStateWithLifecycle()
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     var removing by remember { mutableStateOf<TorrentItem?>(null) }
     val actions = LocalAppActions.current
@@ -119,6 +121,9 @@ fun TransfersScreen(vm: MainViewModel, onOpenTorrent: (String) -> Unit) {
                 item(key = "clipboard") {
                     ClipboardBanner(magnet = magnet, onAdd = vm::addClipboard, onDismiss = vm::dismissClipboard)
                 }
+            }
+            if (killAlert) {
+                item(key = "killed") { KillBanner(brand = vm.oemGuide.brand, onFix = vm::fixKillAlert, onDismiss = vm::dismissKillAlert) }
             }
             if (stats.networkBlock != NetworkBlock.NONE) {
                 item(key = "network") { NetworkBanner(stats.networkBlock) }
@@ -287,6 +292,36 @@ private fun ClipboardBanner(magnet: String, onAdd: () -> Unit, onDismiss: () -> 
         Row(Modifier.fillMaxWidth().padding(end = 8.dp, bottom = 8.dp), horizontalArrangement = Arrangement.End) {
             TextButton(onClick = onDismiss) { Text("Dismiss") }
             TextButton(onClick = onAdd) { Text("Add it") }
+        }
+    }
+}
+
+@Composable
+private fun KillBanner(brand: String, onFix: () -> Unit, onDismiss: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        ),
+        shape = MaterialTheme.shapes.large,
+    ) {
+        Row(Modifier.padding(start = 16.dp, top = 14.dp, end = 16.dp), verticalAlignment = Alignment.Top) {
+            Icon(Icons.Rounded.Warning, null)
+            Spacer(Modifier.width(12.dp))
+            Column {
+                Text("Your phone stopped BetterTorrent", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "Your $brand phone closed the app in the background while it was downloading. Set it up once so downloads keep going.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(end = 8.dp, bottom = 6.dp), horizontalArrangement = Arrangement.End) {
+            TextButton(onClick = onDismiss) { Text("Dismiss") }
+            TextButton(onClick = onFix) { Text("Fix it") }
         }
     }
 }

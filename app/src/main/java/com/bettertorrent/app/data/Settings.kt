@@ -33,6 +33,10 @@ data class AppSettings(
     val player: PlayerChoice = PlayerChoice.BUILT_IN,
     /** The battery-optimization exemption dialog has been shown once. */
     val batteryPromptShown: Boolean = false,
+    /** The phone-maker background setup guide has been shown once. */
+    val oemGuideShown: Boolean = false,
+    /** Start unfinished transfers again after the phone reboots. */
+    val resumeAfterReboot: Boolean = true,
 )
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
@@ -46,6 +50,8 @@ class SettingsRepository(private val context: Context) {
         val onWifi = booleanPreferencesKey("download_on_wifi")
         val onMobile = booleanPreferencesKey("download_on_mobile")
         val batteryPrompt = booleanPreferencesKey("battery_prompt_shown")
+        val oemGuide = booleanPreferencesKey("oem_guide_shown")
+        val resumeAfterReboot = booleanPreferencesKey("resume_after_reboot")
         val maxActive = intPreferencesKey("max_active_downloads")
         val location = stringPreferencesKey("download_location")
         val seed = booleanPreferencesKey("seed_after_complete")
@@ -80,6 +86,8 @@ class SettingsRepository(private val context: Context) {
             clipboardDetect = p[Keys.clipboard] ?: d.clipboardDetect,
             player = enumOr(p[Keys.player], d.player),
             batteryPromptShown = p[Keys.batteryPrompt] ?: d.batteryPromptShown,
+            oemGuideShown = p[Keys.oemGuide] ?: d.oemGuideShown,
+            resumeAfterReboot = p[Keys.resumeAfterReboot] ?: d.resumeAfterReboot,
         )
     }
 
@@ -90,6 +98,8 @@ class SettingsRepository(private val context: Context) {
         p[Keys.onWifi] = s.downloadOnWifi
         p[Keys.onMobile] = s.downloadOnMobile
         p[Keys.batteryPrompt] = s.batteryPromptShown
+        p[Keys.oemGuide] = s.oemGuideShown
+        p[Keys.resumeAfterReboot] = s.resumeAfterReboot
         p[Keys.maxActive] = s.maxActiveDownloads
         p[Keys.location] = s.location.name
         p[Keys.seed] = s.seedAfterComplete

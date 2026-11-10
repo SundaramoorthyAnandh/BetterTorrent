@@ -33,6 +33,8 @@ import com.bettertorrent.app.ui.player.PlayerActivity
 import com.bettertorrent.app.ui.theme.BetterTorrentTheme
 import com.bettertorrent.app.util.BatteryOptimization
 import com.bettertorrent.app.util.FileKinds
+import com.bettertorrent.app.util.OemBackground
+import com.bettertorrent.app.util.OemStep
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -61,8 +63,13 @@ class MainActivity : ComponentActivity(), AppActions {
     private var lastClipTimestamp = -1L
 
     private val batteryRequest = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        if (!BatteryOptimization.isExempt(this)) {
-            vm.message("Downloads may pause when the screen is off. You can allow background use in Settings.")
+        val exempt = BatteryOptimization.isExempt(this)
+        lifecycleScope.launch {
+            // First time on a phone that kills apps: continue with the brand's own settings.
+            val guideOpened = vm.openGuideIfFirstTime()
+            if (!exempt && !guideOpened && !vm.showGuide.value) {
+                vm.message("Downloads may pause when the screen is off. Set it up in Settings → Keep downloading with screen off.")
+            }
         }
     }
 
@@ -121,8 +128,11 @@ class MainActivity : ComponentActivity(), AppActions {
     private fun maybeShowBatteryPrompt() {
         if (!vm.batteryPromptPending.value || !hasWindowFocus()) return
         vm.onBatteryPromptShown()
-        if (BatteryOptimization.isExempt(this)) return
-        launchBatteryRequest()
+        if (BatteryOptimization.isExempt(this)) {
+            lifecycleScope.launch { vm.openGuideIfFirstTime() }
+        } else {
+            launchBatteryRequest()
+        }
     }
 
     private fun launchBatteryRequest() {
@@ -140,6 +150,17 @@ class MainActivity : ComponentActivity(), AppActions {
         } else {
             launchBatteryRequest()
         }
+    }
+
+    override fun openOemStep(step: OemStep) {
+        if (!OemBackground.open(this, step)) {
+            vm.message("Couldn't open that screen on this phone. Find it in Settings → Apps → BetterTorrent.")
+        }
+    }
+
+    override fun openUrl(url: String) {
+        runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+            .onFailure { vm.message("No browser found to open $url") }
     }
 
     private fun readClipboard() {

@@ -30,6 +30,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.bettertorrent.app.ui.add.AddTorrentSheet
+import com.bettertorrent.app.ui.components.BackgroundGuideSheet
 import com.bettertorrent.app.ui.detail.TorrentDetailScreen
 import com.bettertorrent.app.ui.library.LibraryScreen
 import com.bettertorrent.app.ui.settings.SettingsScreen
@@ -125,6 +126,17 @@ fun AppRoot(vm: MainViewModel) {
                 )
             }
         }
+    }
+
+    val showGuide by vm.showGuide.collectAsStateWithLifecycle()
+    if (showGuide) {
+        BackgroundGuideSheet(
+            guide = vm.oemGuide,
+            onAllowBattery = actions::requestBatteryExemption,
+            onOpenStep = actions::openOemStep,
+            onOpenHelp = actions::openUrl,
+            onDismiss = vm::closeGuide,
+        )
     }
 
     if (addState !is AddState.Hidden) {

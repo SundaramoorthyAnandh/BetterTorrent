@@ -6,7 +6,7 @@ Downloads work like [Seedr](https://www.seedr.cc): torrents land in the app's ow
 
 ## Install
 
-1. Download [`dist/BetterTorrent-1.1.0.apk`](dist/BetterTorrent-1.1.0.apk) on your phone.
+1. Download [`dist/BetterTorrent-1.2.0.apk`](dist/BetterTorrent-1.2.0.apk) on your phone.
 2. Open it. Android asks you to allow installs from your browser or file manager. Allow it, then tap **Install**.
 
 Requires Android 10 or newer (arm64, armv7 and x86_64).
@@ -18,6 +18,7 @@ Requires Android 10 or newer (arm64, armv7 and x86_64).
 - [x] **Seedr-style library**: folder browser, storage bar, live progress, Play / Open with / Save to phone Downloads / Share / Delete
 - [x] **Pick files in a torrent**: choose files before adding, and switch files on or off later
 - [x] **Background downloads**: keep going with the screen off (foreground service, wake lock, and a one-time battery-optimization prompt), with a progress notification, Pause all / Resume all / Exit actions, and a "Download complete" alert
+- [x] **Works on aggressive phones** (Vivo, Xiaomi, Oppo, Realme, OnePlus, Huawei, Honor, Samsung and more): a setup guide that detects the phone brand and opens its autostart / background-power screens, a banner when the phone killed the app mid-download, auto-restart if killed, and resume after the phone restarts
 - [x] **Open in VLC / MX Player** or any cast app, via a local stream URL
 - [x] **Subtitles**: from the torrent (`.srt`, `.vtt`, `.ass`, `.ssa`), from the phone, or tracks built into the video
 - [x] **Magnet / .torrent handler**: tap a magnet link anywhere, open `.torrent` files, share links to the app, and get an offer to add a magnet you just copied
@@ -30,6 +31,8 @@ Requires Android 10 or newer (arm64, armv7 and x86_64).
 | `engine/TorrentEngine.kt` | libtorrent session (via libtorrent4j): add/restore torrents, resume data, file priorities, queueing, pause per network type |
 | `engine/StreamServer.kt` | Loopback HTTP server with Range support. Reads wait for verified pieces and set deadlines ahead of the playhead. URLs carry a random token |
 | `service/TorrentService.kt` | Foreground service, notification, and wake/Wi‑Fi locks while transferring |
+| `service/BackgroundState.kt` | Kill detection, watchdog alarms that restart the service, and resume on boot |
+| `util/OemBackground.kt` | Per-brand setup steps and deep links into each phone maker's battery/autostart settings |
 | `ui/` | Jetpack Compose (Material 3): Transfers, Add sheet, Torrent detail, Library, Settings, Player |
 
 ## Build

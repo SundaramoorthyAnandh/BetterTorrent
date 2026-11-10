@@ -4,12 +4,14 @@ import android.app.Application
 import com.bettertorrent.app.data.SettingsRepository
 import com.bettertorrent.app.engine.EngineEvent
 import com.bettertorrent.app.engine.TorrentEngine
+import com.bettertorrent.app.service.BackgroundState
 import com.bettertorrent.app.service.Notifications
 import com.bettertorrent.app.service.TorrentService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
@@ -28,6 +30,9 @@ class BetterTorrentApp : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        // Must run before anything marks transfers active again in this process.
+        BackgroundState.checkForKill(this)
+        killAlert.value = BackgroundState.killAlertPending(this)
         settings = SettingsRepository(this)
         engine = TorrentEngine(this, settings)
         Notifications.createChannels(this)
@@ -44,6 +49,17 @@ class BetterTorrentApp : Application() {
             }.distinctUntilChanged().collect { busy -> if (busy) TorrentService.start(this@BetterTorrentApp) }
         }
         appScope.launch { engine.ensureStarted() }
+        appScope.launch {
+            settings.settings.collect { BackgroundState.setResumeOnBoot(this@BetterTorrentApp, it.resumeAfterReboot) }
+        }
+    }
+
+    /** True when the phone stopped the app mid-download; shown as a banner until dismissed. */
+    val killAlert = MutableStateFlow(false)
+
+    fun dismissKillAlert() {
+        killAlert.value = false
+        BackgroundState.clearKillAlert(this)
     }
 
     companion object {

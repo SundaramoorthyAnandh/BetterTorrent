@@ -15,6 +15,8 @@ import com.bettertorrent.app.engine.TorrentItem
 import com.bettertorrent.app.engine.TorrentPreview
 import com.bettertorrent.app.service.TorrentService
 import com.bettertorrent.app.util.BatteryOptimization
+import com.bettertorrent.app.util.OemBackground
+import com.bettertorrent.app.util.OemGuide
 import com.bettertorrent.app.util.FileKind
 import com.bettertorrent.app.util.Magnet
 import kotlinx.coroutines.CancellationException
@@ -61,6 +63,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Torrent detail to open (e.g. from a notification tap). */
     val pendingDetail = MutableStateFlow<String?>(null)
 
+    /** Phone-maker specific steps for this device. */
+    val oemGuide: OemGuide = OemBackground.guide(app)
+
+    private val _showGuide = MutableStateFlow(false)
+    val showGuide: StateFlow<Boolean> = _showGuide.asStateFlow()
+
+    /** Phone stopped the app mid-download (detected at startup). */
+    val killAlert: StateFlow<Boolean> = bt.killAlert
+
     /** Show the battery-optimization dialog when the main screen next has focus. */
     val batteryPromptPending = MutableStateFlow(false)
     private var batteryChecked = false
@@ -79,9 +90,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         batteryChecked = true
         viewModelScope.launch {
             val s = bt.settings.settings.first()
-            if (!s.batteryPromptShown && !BatteryOptimization.isExempt(getApplication())) {
-                batteryPromptPending.value = true
-            }
+            val needBattery = !s.batteryPromptShown && !BatteryOptimization.isExempt(getApplication())
+            val needGuide = oemGuide.aggressive && !s.oemGuideShown
+            if (needBattery || needGuide) batteryPromptPending.value = true
         }
     }
 
@@ -89,6 +100,32 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         batteryPromptPending.value = false
         viewModelScope.launch { bt.settings.update { it.copy(batteryPromptShown = true) } }
     }
+
+    // ------------------------------------------------------------ background setup guide
+
+    fun openGuide() {
+        _showGuide.value = true
+    }
+
+    fun closeGuide() {
+        _showGuide.value = false
+    }
+
+    /** Shows the guide once on phones known to kill background apps. Returns whether it opened. */
+    suspend fun openGuideIfFirstTime(): Boolean {
+        val s = bt.settings.settings.first()
+        if (!oemGuide.aggressive || s.oemGuideShown) return false
+        bt.settings.update { it.copy(oemGuideShown = true) }
+        _showGuide.value = true
+        return true
+    }
+
+    fun fixKillAlert() {
+        bt.dismissKillAlert()
+        openGuide()
+    }
+
+    fun dismissKillAlert() = bt.dismissKillAlert()
 
     private fun onTorrentStarted() {
         TorrentService.start(getApplication())

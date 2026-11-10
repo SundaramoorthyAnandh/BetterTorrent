@@ -34,6 +34,7 @@ class TorrentService : LifecycleService() {
     private var wifiLock: WifiManager.WifiLock? = null
     private var idleSince = 0L
     private var exiting = false
+    private var watchdogScheduled = false
 
     override fun onCreate() {
         super.onCreate()
@@ -59,6 +60,9 @@ class TorrentService : LifecycleService() {
             ACTION_RESUME_ALL -> engine.resumeAll()
             ACTION_EXIT -> {
                 exiting = true
+                // User chose to stop: no kill alert, no auto-restart, no resume after reboot.
+                BackgroundState.setActive(this, false)
+                Watchdog.cancel(this)
                 AppEvents.requestExit()
                 lifecycleScope.launch {
                     engine.shutdown()
@@ -66,7 +70,15 @@ class TorrentService : LifecycleService() {
                 }
             }
         }
-        return START_NOT_STICKY
+        // If the phone kills the process, Android restarts the service (allowed once the app is
+        // exempt from battery optimization); onCreate then restores the torrents.
+        return START_STICKY
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        // Some phones kill the process right after the app is swiped away: check back shortly.
+        if (BackgroundState.wasActive(this)) Watchdog.checkSoon(this)
     }
 
     private fun onUpdate(list: List<TorrentItem>, stats: EngineStats, streams: Int) {
@@ -76,11 +88,21 @@ class TorrentService : LifecycleService() {
         if (!busy) {
             if (idleSince == 0L) idleSince = now
             if (now - idleSince > IDLE_STOP_MS) {
+                // Finished cleanly: nothing to restart or resume.
+                BackgroundState.setActive(this, false)
+                Watchdog.cancel(this)
                 stopEverything()
                 return
             }
         } else {
             idleSince = 0L
+            if (list.any { it.state.isActive }) {
+                BackgroundState.setActive(this, true)
+                if (!watchdogScheduled) {
+                    Watchdog.schedule(this)
+                    watchdogScheduled = true
+                }
+            }
         }
         // Keep the CPU awake for anything that needs the network, so the screen turning off
         // doesn't stall libtorrent. Nothing to do while the network settings block transfers.

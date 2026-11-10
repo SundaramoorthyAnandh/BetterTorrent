@@ -33,6 +33,7 @@ import androidx.compose.material.icons.rounded.BatteryChargingFull
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.SignalCellularAlt
 import androidx.compose.material.icons.rounded.Warning
+import androidx.compose.material.icons.rounded.RestartAlt
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -142,11 +143,11 @@ fun SettingsScreen(vm: MainViewModel) {
                     icon = Icons.Rounded.BatteryChargingFull,
                     title = "Keep downloading with screen off",
                     subtitle = if (batteryExempt) {
-                        "Allowed. Battery optimization is off for BetterTorrent."
+                        "Battery optimization is off. Tap for ${vm.oemGuide.brand} phone settings."
                     } else {
-                        "Restricted by battery optimization. Downloads may pause when the screen is off. Tap to allow."
+                        "Restricted by battery optimization. Downloads may pause when the screen is off. Tap to set up."
                     },
-                    onClick = actions::requestBatteryExemption,
+                    onClick = vm::openGuide,
                     trailing = {
                         Icon(
                             if (batteryExempt) Icons.Rounded.CheckCircle else Icons.Rounded.Warning,
@@ -154,6 +155,16 @@ fun SettingsScreen(vm: MainViewModel) {
                             tint = if (batteryExempt) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error,
                         )
                     },
+                )
+            }
+
+            item {
+                SwitchRow(
+                    icon = Icons.Rounded.RestartAlt,
+                    title = "Resume after phone restart",
+                    subtitle = "Start unfinished downloads again when the phone turns on",
+                    checked = s.resumeAfterReboot,
+                    onChange = { v -> vm.updateSettings { it.copy(resumeAfterReboot = v) } },
                 )
             }
 
