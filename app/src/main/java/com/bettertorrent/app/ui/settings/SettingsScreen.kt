@@ -29,6 +29,14 @@ import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.Upload
 import androidx.compose.material.icons.rounded.Wifi
+import androidx.compose.material.icons.rounded.BatteryChargingFull
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.SignalCellularAlt
+import androidx.compose.material.icons.rounded.Warning
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import com.bettertorrent.app.util.BatteryOptimization
 import androidx.compose.material.icons.rounded.Contrast
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -77,6 +85,9 @@ fun SettingsScreen(vm: MainViewModel) {
     val actions = LocalAppActions.current
     var locationDialog by remember { mutableStateOf(false) }
     var limitDialog by remember { mutableStateOf<LimitKind?>(null) }
+    val context = LocalContext.current
+    var batteryExempt by remember { mutableStateOf(BatteryOptimization.isExempt(context)) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { batteryExempt = BatteryOptimization.isExempt(context) }
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Settings") }) },
@@ -126,15 +137,55 @@ fun SettingsScreen(vm: MainViewModel) {
                     onChange = { v -> vm.updateSettings { it.copy(seedAfterComplete = v) } },
                 )
             }
+            item {
+                SettingRow(
+                    icon = Icons.Rounded.BatteryChargingFull,
+                    title = "Keep downloading with screen off",
+                    subtitle = if (batteryExempt) {
+                        "Allowed. Battery optimization is off for BetterTorrent."
+                    } else {
+                        "Restricted by battery optimization. Downloads may pause when the screen is off. Tap to allow."
+                    },
+                    onClick = actions::requestBatteryExemption,
+                    trailing = {
+                        Icon(
+                            if (batteryExempt) Icons.Rounded.CheckCircle else Icons.Rounded.Warning,
+                            contentDescription = null,
+                            tint = if (batteryExempt) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error,
+                        )
+                    },
+                )
+            }
 
             item { SectionHeader("Network") }
             item {
                 SwitchRow(
                     icon = Icons.Rounded.Wifi,
-                    title = "Download only on Wi‑Fi",
-                    subtitle = "Pause all transfers on mobile data",
-                    checked = s.wifiOnly,
-                    onChange = { v -> vm.updateSettings { it.copy(wifiOnly = v) } },
+                    title = "Download on Wi‑Fi",
+                    subtitle = "Includes Ethernet",
+                    checked = s.downloadOnWifi,
+                    onChange = { v ->
+                        if (!v && !s.downloadOnMobile) {
+                            vm.message("Keep at least one network on. To stop everything, pause your transfers instead.")
+                        } else {
+                            vm.updateSettings { it.copy(downloadOnWifi = v) }
+                        }
+                    },
+                )
+            }
+            item {
+                SwitchRow(
+                    icon = Icons.Rounded.SignalCellularAlt,
+                    title = "Download on mobile data",
+                    subtitle = "Uses your data plan",
+                    checked = s.downloadOnMobile,
+                    onChange = { v ->
+                        if (!v && !s.downloadOnWifi) {
+                            vm.message("Keep at least one network on. To stop everything, pause your transfers instead.")
+                        } else {
+                            vm.updateSettings { it.copy(downloadOnMobile = v) }
+                        }
+                    },
                 )
             }
             item {

@@ -31,8 +31,10 @@ import com.bettertorrent.app.service.Notifications
 import com.bettertorrent.app.service.TorrentService
 import com.bettertorrent.app.ui.player.PlayerActivity
 import com.bettertorrent.app.ui.theme.BetterTorrentTheme
+import com.bettertorrent.app.util.BatteryOptimization
 import com.bettertorrent.app.util.FileKinds
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -58,6 +60,12 @@ class MainActivity : ComponentActivity(), AppActions {
 
     private var lastClipTimestamp = -1L
 
+    private val batteryRequest = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        if (!BatteryOptimization.isExempt(this)) {
+            vm.message("Downloads may pause when the screen is off. You can allow background use in Settings.")
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -67,6 +75,17 @@ class MainActivity : ComponentActivity(), AppActions {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.CREATED) {
                 AppEvents.exit.collect { finishAndRemoveTask() }
+            }
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                vm.batteryPromptPending.collect { pending ->
+                    if (pending) {
+                        // Let a just-launched player or closing sheet settle; only ask while this screen has focus.
+                        delay(800)
+                        maybeShowBatteryPrompt()
+                    }
+                }
             }
         }
 
@@ -93,7 +112,34 @@ class MainActivity : ComponentActivity(), AppActions {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) readClipboard()
+        if (hasFocus) {
+            readClipboard()
+            maybeShowBatteryPrompt()
+        }
+    }
+
+    private fun maybeShowBatteryPrompt() {
+        if (!vm.batteryPromptPending.value || !hasWindowFocus()) return
+        vm.onBatteryPromptShown()
+        if (BatteryOptimization.isExempt(this)) return
+        launchBatteryRequest()
+    }
+
+    private fun launchBatteryRequest() {
+        try {
+            batteryRequest.launch(BatteryOptimization.requestIntent(this))
+        } catch (e: ActivityNotFoundException) {
+            runCatching { batteryRequest.launch(BatteryOptimization.settingsIntent()) }
+        }
+    }
+
+    override fun requestBatteryExemption() {
+        if (BatteryOptimization.isExempt(this)) {
+            runCatching { startActivity(BatteryOptimization.settingsIntent()) }
+                .onFailure { vm.message("Open Settings → Apps → BetterTorrent → Battery to change this.") }
+        } else {
+            launchBatteryRequest()
+        }
     }
 
     private fun readClipboard() {

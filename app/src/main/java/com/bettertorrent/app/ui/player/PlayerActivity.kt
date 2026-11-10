@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
 import android.view.View
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -114,6 +115,21 @@ class PlayerActivity : ComponentActivity() {
     private var resumePositionMs = 0L
     private var playWhenReady = true
 
+    /** Keeps the screen on while the video plays or buffers; normal timeout when paused. */
+    private val screenOnListener = object : Player.Listener {
+        override fun onEvents(player: Player, events: Player.Events) = updateKeepScreenOn(player)
+    }
+
+    private fun updateKeepScreenOn(player: Player?) {
+        val active = player != null && player.playWhenReady &&
+            (player.playbackState == Player.STATE_READY || player.playbackState == Player.STATE_BUFFERING)
+        if (active) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
     private val pickSubtitle = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@registerForActivityResult
         val name = displayName(uri) ?: "Subtitle"
@@ -211,20 +227,24 @@ class PlayerActivity : ComponentActivity() {
             .setSeekBackIncrementMs(10_000)
             .setSeekForwardIncrementMs(10_000)
             .build()
+        player.addListener(screenOnListener)
         player.setMediaItem(buildMediaItem(), resumePositionMs)
         applyTextTrackState(player)
         player.playWhenReady = playWhenReady
         player.prepare()
         playerState.value = player
+        updateKeepScreenOn(player)
     }
 
     private fun releasePlayer() {
         playerState.value?.let {
             resumePositionMs = it.currentPosition
             playWhenReady = it.playWhenReady
+            it.removeListener(screenOnListener)
             it.release()
         }
         playerState.value = null
+        updateKeepScreenOn(null)
     }
 
     private fun buildMediaItem(): MediaItem {
@@ -406,7 +426,6 @@ private fun PlayerScreen(
             factory = { ctx ->
                 PlayerView(ctx).apply {
                     useController = true
-                    keepScreenOn = true
                     controllerShowTimeoutMs = 3500
                     setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
                     setShowNextButton(false)

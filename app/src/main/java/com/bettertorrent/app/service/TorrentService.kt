@@ -20,6 +20,7 @@ import com.bettertorrent.app.AppEvents
 import com.bettertorrent.app.BetterTorrentApp
 import com.bettertorrent.app.R
 import com.bettertorrent.app.engine.EngineStats
+import com.bettertorrent.app.engine.NetworkBlock
 import com.bettertorrent.app.engine.TorrentItem
 import com.bettertorrent.app.engine.TorrentState
 import com.bettertorrent.app.util.Fmt
@@ -81,8 +82,9 @@ class TorrentService : LifecycleService() {
         } else {
             idleSince = 0L
         }
-        val transferring = list.any { it.state == TorrentState.DOWNLOADING || it.state == TorrentState.SEEDING }
-        if (transferring || streams > 0) acquireLocks() else releaseLocks()
+        // Keep the CPU awake for anything that needs the network, so the screen turning off
+        // doesn't stall libtorrent. Nothing to do while the network settings block transfers.
+        if (busy && stats.networkBlock == NetworkBlock.NONE) acquireLocks() else releaseLocks()
         if (Notifications.canPost(this)) {
             try {
                 NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, buildNotification(list, stats, streams))
@@ -99,7 +101,8 @@ class TorrentService : LifecycleService() {
         val anyPaused = list.any { it.state == TorrentState.PAUSED }
 
         val title = when {
-            stats.waitingForWifi -> "Waiting for Wi‑Fi"
+            stats.networkBlock == NetworkBlock.MOBILE_OFF -> "Waiting for Wi‑Fi"
+            stats.networkBlock == NetworkBlock.WIFI_OFF -> "Waiting for mobile data"
             downloading.isNotEmpty() -> "Downloading ${downloading.size} · ↓ ${Fmt.speed(stats.downRate)}"
             seeding.isNotEmpty() -> "Seeding ${seeding.size} · ↑ ${Fmt.speed(stats.upRate)}"
             streams > 0 -> "Streaming"
@@ -167,7 +170,8 @@ class TorrentService : LifecycleService() {
                 .apply { setReferenceCounted(false) }
         }
         wakeLock?.acquire(WAKE_LOCK_TIMEOUT_MS)
-        if (wifiLock == null) {
+        // High-perf Wi‑Fi lock keeps the radio awake with the screen off (no-op from Android 14).
+        if (wifiLock == null && Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             @Suppress("DEPRECATION")
             wifiLock = getSystemService(WifiManager::class.java)
                 ?.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "BetterTorrent:wifi")

@@ -90,11 +90,13 @@ class TorrentEngine(
     @Volatile
     private var settings = AppSettings()
 
-    @Volatile
-    private var onWifi = true
+    private enum class NetType { WIFI, MOBILE, OTHER, NONE }
 
     @Volatile
-    private var waitingForWifi = false
+    private var netType = NetType.NONE
+
+    @Volatile
+    private var networkBlock = NetworkBlock.NONE
 
     private val _torrents = MutableStateFlow<List<TorrentItem>>(emptyList())
     val torrents: StateFlow<List<TorrentItem>> = _torrents.asStateFlow()
@@ -183,30 +185,34 @@ class TorrentEngine(
         }
     }
 
-    // ---------------------------------------------------------------- network (Wi-Fi only)
+    // ---------------------------------------------------------------- network (Wi-Fi / mobile data switches)
 
     private val connectivity by lazy { context.getSystemService(ConnectivityManager::class.java) }
 
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
-            onWifi = isWifiLike(caps)
+            netType = classify(caps)
             updateNetworkPause()
         }
 
         override fun onLost(network: Network) {
-            onWifi = false
+            // No default network: nothing can transfer anyway, so don't flag a settings block.
+            netType = NetType.NONE
             updateNetworkPause()
         }
     }
 
-    private fun isWifiLike(caps: NetworkCapabilities?): Boolean = caps != null && (
+    private fun classify(caps: NetworkCapabilities?): NetType = when {
+        caps == null -> NetType.NONE
         caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
-            caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
-        )
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> NetType.WIFI
+        caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> NetType.MOBILE
+        else -> NetType.OTHER
+    }
 
     private fun registerNetworkWatcher() {
         runCatching {
-            onWifi = isWifiLike(connectivity.getNetworkCapabilities(connectivity.activeNetwork))
+            netType = classify(connectivity.getNetworkCapabilities(connectivity.activeNetwork))
             connectivity.registerDefaultNetworkCallback(networkCallback)
         }
         updateNetworkPause()
@@ -219,8 +225,13 @@ class TorrentEngine(
     @Synchronized
     private fun updateNetworkPause() {
         if (!isStarted) return
-        val shouldPause = settings.wifiOnly && !onWifi
-        waitingForWifi = shouldPause
+        val block = when (netType) {
+            NetType.WIFI -> if (settings.downloadOnWifi) NetworkBlock.NONE else NetworkBlock.WIFI_OFF
+            NetType.MOBILE -> if (settings.downloadOnMobile) NetworkBlock.NONE else NetworkBlock.MOBILE_OFF
+            NetType.OTHER, NetType.NONE -> NetworkBlock.NONE
+        }
+        networkBlock = block
+        val shouldPause = block != NetworkBlock.NONE
         if (shouldPause && !session.isPaused) session.pause()
         if (!shouldPause && session.isPaused) session.resume()
     }
@@ -320,7 +331,7 @@ class TorrentEngine(
         _stats.value = EngineStats(
             downRate = items.sumOf { it.downRate },
             upRate = items.sumOf { it.upRate },
-            waitingForWifi = waitingForWifi,
+            networkBlock = networkBlock,
             running = true,
         )
     }

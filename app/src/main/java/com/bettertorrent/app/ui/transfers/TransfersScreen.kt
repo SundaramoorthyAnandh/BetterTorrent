@@ -29,6 +29,7 @@ import androidx.compose.material.icons.rounded.FileOpen
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.SignalCellularOff
 import androidx.compose.material.icons.rounded.WifiOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -67,6 +68,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bettertorrent.app.engine.EngineStats
+import com.bettertorrent.app.engine.NetworkBlock
 import com.bettertorrent.app.engine.TorrentItem
 import com.bettertorrent.app.engine.TorrentState
 import com.bettertorrent.app.ui.LocalAppActions
@@ -118,8 +120,8 @@ fun TransfersScreen(vm: MainViewModel, onOpenTorrent: (String) -> Unit) {
                     ClipboardBanner(magnet = magnet, onAdd = vm::addClipboard, onDismiss = vm::dismissClipboard)
                 }
             }
-            if (stats.waitingForWifi) {
-                item(key = "wifi") { WifiBanner() }
+            if (stats.networkBlock != NetworkBlock.NONE) {
+                item(key = "network") { NetworkBanner(stats.networkBlock) }
             }
             if (torrents.isEmpty()) {
                 item(key = "empty") {
@@ -290,7 +292,13 @@ private fun ClipboardBanner(magnet: String, onAdd: () -> Unit, onDismiss: () -> 
 }
 
 @Composable
-private fun WifiBanner() {
+private fun NetworkBanner(block: NetworkBlock) {
+    val (title, body) = when (block) {
+        NetworkBlock.MOBILE_OFF -> "Waiting for Wi‑Fi" to
+            "Downloads on mobile data are off. Transfers resume on Wi‑Fi, or turn on “Download on mobile data” in Settings."
+        else -> "Waiting for mobile data" to
+            "Downloads on Wi‑Fi are off. Transfers resume on mobile data, or turn on “Download on Wi‑Fi” in Settings."
+    }
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -302,14 +310,11 @@ private fun WifiBanner() {
         shape = MaterialTheme.shapes.large,
     ) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Rounded.WifiOff, null)
+            Icon(if (block == NetworkBlock.MOBILE_OFF) Icons.Rounded.WifiOff else Icons.Rounded.SignalCellularOff, null)
             Spacer(Modifier.width(12.dp))
             Column {
-                Text("Waiting for Wi‑Fi", style = MaterialTheme.typography.titleSmall)
-                Text(
-                    "Transfers resume on Wi‑Fi. Turn off “Download only on Wi‑Fi” in Settings to use mobile data.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
+                Text(title, style = MaterialTheme.typography.titleSmall)
+                Text(body, style = MaterialTheme.typography.bodySmall)
             }
         }
     }

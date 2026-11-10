@@ -13,6 +13,8 @@ import com.bettertorrent.app.engine.EngineStats
 import com.bettertorrent.app.engine.PlayRequest
 import com.bettertorrent.app.engine.TorrentItem
 import com.bettertorrent.app.engine.TorrentPreview
+import com.bettertorrent.app.service.TorrentService
+import com.bettertorrent.app.util.BatteryOptimization
 import com.bettertorrent.app.util.FileKind
 import com.bettertorrent.app.util.Magnet
 import kotlinx.coroutines.CancellationException
@@ -24,6 +26,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -58,8 +61,38 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Torrent detail to open (e.g. from a notification tap). */
     val pendingDetail = MutableStateFlow<String?>(null)
 
+    /** Show the battery-optimization dialog when the main screen next has focus. */
+    val batteryPromptPending = MutableStateFlow(false)
+    private var batteryChecked = false
+
     init {
         viewModelScope.launch { engine.ensureStarted() }
+        // Ask once, the first time anything is downloading (covers torrents added before this version).
+        viewModelScope.launch {
+            torrents.first { list -> list.any { it.state.isActive } }
+            maybeAskBatteryExemption()
+        }
+    }
+
+    private fun maybeAskBatteryExemption() {
+        if (batteryChecked) return
+        batteryChecked = true
+        viewModelScope.launch {
+            val s = bt.settings.settings.first()
+            if (!s.batteryPromptShown && !BatteryOptimization.isExempt(getApplication())) {
+                batteryPromptPending.value = true
+            }
+        }
+    }
+
+    fun onBatteryPromptShown() {
+        batteryPromptPending.value = false
+        viewModelScope.launch { bt.settings.update { it.copy(batteryPromptShown = true) } }
+    }
+
+    private fun onTorrentStarted() {
+        TorrentService.start(getApplication())
+        maybeAskBatteryExemption()
     }
 
     fun message(text: String) {
@@ -167,6 +200,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 engine.addTorrent(r.preview, r.selected, sequential = false)
                 _add.value = AddState.Hidden
+                onTorrentStarted()
                 message(if (r.preview.alreadyAdded) "Updated “${r.preview.name}”" else "Downloading “${r.preview.name}”")
             } catch (e: Throwable) {
                 _add.value = r.copy(busy = false)
@@ -191,6 +225,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     ?: throw IllegalStateException("no stream")
                 _add.value = AddState.Hidden
                 onReady(req)
+                onTorrentStarted()
             } catch (e: Throwable) {
                 _add.value = r.copy(busy = false)
                 message("Couldn't start the stream. Try again.")

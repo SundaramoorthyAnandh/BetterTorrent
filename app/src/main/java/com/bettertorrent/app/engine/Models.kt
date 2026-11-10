@@ -85,10 +85,19 @@ data class FileTorrentLink(val hash: String, val index: Int, val size: Long, val
     val progress: Float get() = if (size > 0) (downloaded.toFloat() / size).coerceIn(0f, 1f) else 1f
 }
 
+/** Why the session is paused by the network settings, if it is. */
+enum class NetworkBlock {
+    NONE,
+    /** On mobile data while "Download on mobile data" is off. */
+    MOBILE_OFF,
+    /** On Wi‑Fi while "Download on Wi‑Fi" is off. */
+    WIFI_OFF,
+}
+
 data class EngineStats(
     val downRate: Long = 0,
     val upRate: Long = 0,
-    val waitingForWifi: Boolean = false,
+    val networkBlock: NetworkBlock = NetworkBlock.NONE,
     val running: Boolean = false,
 )
 
