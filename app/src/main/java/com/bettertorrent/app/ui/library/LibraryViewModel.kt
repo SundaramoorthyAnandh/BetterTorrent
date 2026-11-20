@@ -6,6 +6,7 @@ import android.system.Os
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.bettertorrent.app.BetterTorrentApp
+import com.bettertorrent.app.data.DownloadLocation
 import com.bettertorrent.app.engine.FileTorrentLink
 import com.bettertorrent.app.engine.TorrentEngine
 import com.bettertorrent.app.util.Exporter
@@ -67,7 +68,8 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
     private val refreshLock = Mutex()
 
     fun rootLabel(root: File): String = when (TorrentEngine.canonical(root)) {
-        TorrentEngine.canonical(engine.downloadDir()) -> "App storage"
+        TorrentEngine.canonical(engine.downloadDir(DownloadLocation.APP)) -> "App storage"
+        TorrentEngine.canonical(engine.downloadDir(DownloadLocation.PUBLIC)) -> "Downloads/BetterTorrent"
         else -> root.name
     }
 
@@ -81,7 +83,7 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun load(cur: LibraryUi): LibraryUi {
-        val appRoot = engine.downloadDir().apply { mkdirs() }
+        val appRoot = engine.downloadDir(DownloadLocation.APP).apply { mkdirs() }
         val roots = engine.libraryRoots().filter { it.exists() || it == appRoot }
         val root = cur.root?.takeIf { r -> roots.any { it == r } } ?: roots.first()
         val dir = cur.dir?.takeIf { it.isDirectory && isInside(it, root) } ?: root
@@ -200,6 +202,9 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
     }
+
+    fun isPublicRoot(): Boolean =
+        _ui.value.root?.let { TorrentEngine.canonical(it) == TorrentEngine.canonical(engine.downloadDir(DownloadLocation.PUBLIC)) } == true
 
     private fun isInside(f: File, root: File): Boolean {
         val p = TorrentEngine.canonical(f)

@@ -25,9 +25,9 @@ android {
     defaultConfig {
         applicationId = "com.bettertorrent.app"
         minSdk = 29
-        targetSdk = 36
-        versionCode = 5
-        versionName = "2.0.0"
+        targetSdk = 35
+        versionCode = 3
+        versionName = "1.2.0"
 
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")

@@ -13,6 +13,7 @@ interface AppActions {
     fun playLocalFile(file: File, external: Boolean = false)
     fun openFileWith(file: File)
     fun shareFile(file: File)
+    fun requestAllFilesAccess(onResult: (Boolean) -> Unit)
     fun copyText(label: String, text: String)
     /** Asks for (or opens settings to review) the battery-optimization exemption. */
     fun requestBatteryExemption()

@@ -50,6 +50,15 @@ class MainActivity : ComponentActivity(), AppActions {
     }
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
+    private var storageCallback: ((Boolean) -> Unit)? = null
+    private val allFilesAccess = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        storageCallback?.invoke(vm.engine.canUsePublicFolder())
+        storageCallback = null
+    }
+    private val legacyWrite = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        storageCallback?.invoke(granted)
+        storageCallback = null
+    }
 
     private var lastClipTimestamp = -1L
 
@@ -89,7 +98,7 @@ class MainActivity : ComponentActivity(), AppActions {
 
         setContent {
             val settings by vm.settings.collectAsStateWithLifecycle()
-            BetterTorrentTheme(themeMode = settings.themeMode, dynamicColor = settings.dynamicColor, font = settings.font) {
+            BetterTorrentTheme(themeMode = settings.themeMode, dynamicColor = settings.dynamicColor) {
                 CompositionLocalProvider(LocalAppActions provides this) {
                     AppRoot(vm)
                 }
@@ -268,6 +277,24 @@ class MainActivity : ComponentActivity(), AppActions {
             startActivity(Intent.createChooser(intent, "Share"))
         } catch (e: Exception) {
             vm.message("Couldn't share ${file.name}.")
+        }
+    }
+
+    override fun requestAllFilesAccess(onResult: (Boolean) -> Unit) {
+        if (vm.engine.canUsePublicFolder()) {
+            onResult(true)
+            return
+        }
+        storageCallback = onResult
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val perApp = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:$packageName"))
+            try {
+                allFilesAccess.launch(perApp)
+            } catch (e: ActivityNotFoundException) {
+                allFilesAccess.launch(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+            }
+        } else {
+            legacyWrite.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         }
     }
 

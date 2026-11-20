@@ -92,9 +92,6 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.bettertorrent.app.AppEvents
 import com.bettertorrent.app.BetterTorrentApp
-import com.bettertorrent.app.data.AppFont
-import androidx.compose.runtime.collectAsState
-import kotlinx.coroutines.flow.map
 import com.bettertorrent.app.engine.PlayRequest
 import com.bettertorrent.app.engine.TorrentFileInfo
 import com.bettertorrent.app.ui.theme.PlayerTheme
@@ -164,10 +161,7 @@ class PlayerActivity : ComponentActivity() {
         }
 
         setContent {
-            val font by (application as BetterTorrentApp).settings.settings
-                .map { it.font }
-                .collectAsState(initial = AppFont.SYSTEM)
-            PlayerTheme(font = font) {
+            PlayerTheme {
                 PlayerScreen(
                     player = playerState,
                     request = request,
