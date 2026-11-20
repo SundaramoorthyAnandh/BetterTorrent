@@ -136,10 +136,12 @@ class MainActivity : ComponentActivity(), AppActions {
     }
 
     private fun launchBatteryRequest() {
+        // Some phone makers block or remove this system dialog (SecurityException etc.).
         try {
             batteryRequest.launch(BatteryOptimization.requestIntent(this))
-        } catch (e: ActivityNotFoundException) {
+        } catch (e: Exception) {
             runCatching { batteryRequest.launch(BatteryOptimization.settingsIntent()) }
+                .onFailure { vm.message("Open Settings → Apps → BetterTorrent → Battery and allow background use.") }
         }
     }
 
@@ -156,6 +158,15 @@ class MainActivity : ComponentActivity(), AppActions {
         if (!OemBackground.open(this, step)) {
             vm.message("Couldn't open that screen on this phone. Find it in Settings → Apps → BetterTorrent.")
         }
+    }
+
+    override fun shareText(subject: String, text: String) {
+        val intent = Intent(Intent.ACTION_SEND)
+            .setType("text/plain")
+            .putExtra(Intent.EXTRA_SUBJECT, subject)
+            .putExtra(Intent.EXTRA_TEXT, text)
+        runCatching { startActivity(Intent.createChooser(intent, "Share report")) }
+            .onFailure { copyText(subject, text) }
     }
 
     override fun openUrl(url: String) {
@@ -290,8 +301,12 @@ class MainActivity : ComponentActivity(), AppActions {
             val perApp = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:$packageName"))
             try {
                 allFilesAccess.launch(perApp)
-            } catch (e: ActivityNotFoundException) {
-                allFilesAccess.launch(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+            } catch (e: Exception) {
+                runCatching { allFilesAccess.launch(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)) }
+                    .onFailure {
+                        storageCallback = null
+                        onResult(false)
+                    }
             }
         } else {
             legacyWrite.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)

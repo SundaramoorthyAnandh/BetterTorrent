@@ -180,7 +180,10 @@ object OemBackground {
                     else -> emptyList()
                 }
                 val aggressive = autostart.isNotEmpty() || "meizu" in maker
-                val brand = Build.MANUFACTURER.replaceFirstChar { it.titlecase(Locale.US) }
+                val brand = Build.MANUFACTURER
+                    .takeUnless { it.isNullOrBlank() || it.equals("unknown", ignoreCase = true) }
+                    ?.replaceFirstChar { it.titlecase(Locale.US) }
+                    ?: "Android"
                 OemGuide(
                     brand = brand,
                     aggressive = aggressive,

@@ -90,6 +90,7 @@ fun TransfersScreen(vm: MainViewModel, onOpenTorrent: (String) -> Unit) {
     val stats by vm.stats.collectAsStateWithLifecycle()
     val clipboardMagnet by vm.clipboardMagnet.collectAsStateWithLifecycle()
     val killAlert by vm.killAlert.collectAsStateWithLifecycle()
+    val crashReport by vm.crashReport.collectAsStateWithLifecycle()
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     var removing by remember { mutableStateOf<TorrentItem?>(null) }
     val actions = LocalAppActions.current
@@ -120,6 +121,17 @@ fun TransfersScreen(vm: MainViewModel, onOpenTorrent: (String) -> Unit) {
             clipboardMagnet?.let { magnet ->
                 item(key = "clipboard") {
                     ClipboardBanner(magnet = magnet, onAdd = vm::addClipboard, onDismiss = vm::dismissClipboard)
+                }
+            }
+            crashReport?.let { report ->
+                item(key = "crash") {
+                    CrashBanner(
+                        onShare = {
+                            actions.shareText("BetterTorrent crash report", report)
+                            vm.dismissCrashReport()
+                        },
+                        onDismiss = vm::dismissCrashReport,
+                    )
                 }
             }
             if (killAlert) {
@@ -292,6 +304,36 @@ private fun ClipboardBanner(magnet: String, onAdd: () -> Unit, onDismiss: () -> 
         Row(Modifier.fillMaxWidth().padding(end = 8.dp, bottom = 8.dp), horizontalArrangement = Arrangement.End) {
             TextButton(onClick = onDismiss) { Text("Dismiss") }
             TextButton(onClick = onAdd) { Text("Add it") }
+        }
+    }
+}
+
+@Composable
+private fun CrashBanner(onShare: () -> Unit, onDismiss: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        ),
+        shape = MaterialTheme.shapes.large,
+    ) {
+        Row(Modifier.padding(start = 16.dp, top = 14.dp, end = 16.dp), verticalAlignment = Alignment.Top) {
+            Icon(Icons.Rounded.Warning, null)
+            Spacer(Modifier.width(12.dp))
+            Column {
+                Text("BetterTorrent crashed last time", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "Share the crash report with the developer so it can be fixed. It only contains app and phone details, no files or links.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(end = 8.dp, bottom = 6.dp), horizontalArrangement = Arrangement.End) {
+            TextButton(onClick = onDismiss) { Text("Dismiss") }
+            TextButton(onClick = onShare) { Text("Share report") }
         }
     }
 }

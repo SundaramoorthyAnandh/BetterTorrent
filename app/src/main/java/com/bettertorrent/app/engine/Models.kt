@@ -29,6 +29,8 @@ class TorrentPreview(
     val files: List<TorrentFileInfo>,
     val torrentBytes: ByteArray,
     val alreadyAdded: Boolean,
+    /** Peer addresses from the magnet link (x.pe=ip:port), handed to the session on add. */
+    val peers: List<Pair<String, Int>> = emptyList(),
 )
 
 enum class TorrentState(val label: String) {

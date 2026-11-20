@@ -6,10 +6,14 @@ Downloads work like [Seedr](https://www.seedr.cc): torrents land in the app's ow
 
 ## Install
 
-1. Download [`dist/BetterTorrent-1.2.0.apk`](dist/BetterTorrent-1.2.0.apk) on your phone.
+1. Download [`dist/BetterTorrent-1.2.1.apk`](dist/BetterTorrent-1.2.1.apk) on your phone.
 2. Open it. Android asks you to allow installs from your browser or file manager. Allow it, then tap **Install**.
 
 Requires Android 10 or newer (arm64, armv7 and x86_64).
+
+If you installed 2.0.0 (signed with a different key), uninstall it first. Versions 1.2.0 and 1.3.0 update in place.
+
+If the app ever crashes, the next launch offers **Share report** with the error details. Nothing is sent automatically.
 
 ## Features
 

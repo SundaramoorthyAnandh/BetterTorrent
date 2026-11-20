@@ -72,6 +72,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Phone stopped the app mid-download (detected at startup). */
     val killAlert: StateFlow<Boolean> = bt.killAlert
 
+    /** Last crash report, if the app crashed since it was last dismissed. */
+    val crashReport: StateFlow<String?> = bt.crashReport
+
+    fun dismissCrashReport() = bt.dismissCrashReport()
+
     /** Show the battery-optimization dialog when the main screen next has focus. */
     val batteryPromptPending = MutableStateFlow(false)
     private var batteryChecked = false

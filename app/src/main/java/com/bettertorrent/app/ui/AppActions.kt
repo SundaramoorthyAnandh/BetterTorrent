@@ -19,6 +19,7 @@ interface AppActions {
     fun requestBatteryExemption()
     fun openOemStep(step: OemStep)
     fun openUrl(url: String)
+    fun shareText(subject: String, text: String)
 }
 
 val LocalAppActions = staticCompositionLocalOf<AppActions> { error("AppActions not provided") }

@@ -171,7 +171,7 @@ class PlayerActivity : ComponentActivity() {
                     onBack = { finish() },
                     onOpenExternal = ::openExternally,
                     onPickTorrentSubtitle = ::useTorrentSubtitle,
-                    onPickDeviceSubtitle = { pickSubtitle.launch(arrayOf("*/*")) },
+                    onPickDeviceSubtitle = { runCatching { pickSubtitle.launch(arrayOf("*/*")) } },
                     onSubtitlesOff = ::disableSubtitles,
                     onRetry = ::retry,
                 )

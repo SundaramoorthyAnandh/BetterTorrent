@@ -24,7 +24,9 @@ import com.bettertorrent.app.engine.NetworkBlock
 import com.bettertorrent.app.engine.TorrentItem
 import com.bettertorrent.app.engine.TorrentState
 import com.bettertorrent.app.util.Fmt
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 
 /** Keeps torrents running in the background with a progress notification. */
@@ -46,7 +48,15 @@ class TorrentService : LifecycleService() {
         val engine = (application as BetterTorrentApp).engine
         lifecycleScope.launch {
             engine.ensureStarted()
-            combine(engine.torrents, engine.stats, engine.streamServer.activeStreams) { list, stats, streams ->
+            // The ticker re-checks idleness: StateFlows don't re-emit an unchanged (finished) list,
+            // so without it the service never noticed it was idle and never stopped.
+            val ticker = flow {
+                while (true) {
+                    emit(Unit)
+                    delay(5_000)
+                }
+            }
+            combine(engine.torrents, engine.stats, engine.streamServer.activeStreams, ticker) { list, stats, streams, _ ->
                 Triple(list, stats, streams)
             }.collect { (list, stats, streams) -> onUpdate(list, stats, streams) }
         }

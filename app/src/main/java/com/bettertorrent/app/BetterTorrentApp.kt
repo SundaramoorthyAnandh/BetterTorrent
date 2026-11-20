@@ -7,6 +7,8 @@ import com.bettertorrent.app.engine.TorrentEngine
 import com.bettertorrent.app.service.BackgroundState
 import com.bettertorrent.app.service.Notifications
 import com.bettertorrent.app.service.TorrentService
+import com.bettertorrent.app.util.CrashLog
+import com.bettertorrent.app.util.PreviousExit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -31,8 +33,13 @@ class BetterTorrentApp : Application() {
         super.onCreate()
         instance = this
         // Must run before anything marks transfers active again in this process.
+        CrashLog.install(this)
+        val previousExit = CrashLog.checkPreviousExit(this)
         BackgroundState.checkForKill(this)
+        // A crash or an app update isn't the phone killing the app.
+        if (previousExit != PreviousExit.OTHER) BackgroundState.clearKillAlert(this)
         killAlert.value = BackgroundState.killAlertPending(this)
+        crashReport.value = CrashLog.pendingReport(this)
         settings = SettingsRepository(this)
         engine = TorrentEngine(this, settings)
         Notifications.createChannels(this)
@@ -56,6 +63,14 @@ class BetterTorrentApp : Application() {
 
     /** True when the phone stopped the app mid-download; shown as a banner until dismissed. */
     val killAlert = MutableStateFlow(false)
+
+    /** Report from the last crash, shown as a banner until shared or dismissed. */
+    val crashReport = MutableStateFlow<String?>(null)
+
+    fun dismissCrashReport() {
+        crashReport.value = null
+        CrashLog.dismiss(this)
+    }
 
     fun dismissKillAlert() {
         killAlert.value = false

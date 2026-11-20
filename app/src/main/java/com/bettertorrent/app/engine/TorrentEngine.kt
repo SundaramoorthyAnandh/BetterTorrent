@@ -41,6 +41,7 @@ import org.libtorrent4j.SessionManager
 import org.libtorrent4j.SessionParams
 import org.libtorrent4j.SettingsPack
 import org.libtorrent4j.Sha1Hash
+import org.libtorrent4j.TcpEndpoint
 import org.libtorrent4j.TorrentFlags
 import org.libtorrent4j.TorrentHandle
 import org.libtorrent4j.TorrentInfo
@@ -54,6 +55,10 @@ import org.libtorrent4j.alerts.TorrentErrorAlert
 import org.libtorrent4j.swig.settings_pack
 import org.libtorrent4j.swig.torrent_flags_t
 import java.io.File
+import java.lang.ref.Reference
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.max
@@ -271,10 +276,12 @@ class TorrentEngine(
             _events.tryEmit(EngineEvent.Error("Couldn't add torrent: ${a.error().message}"))
             return
         }
+        // a.handle() points into the alert's own memory, which libtorrent frees and reuses
+        // shortly after this callback. Use it only here; never cache it (that crashed the app).
         val h = a.handle()
         val hash = h.infoHash().toHex()
         if (!metas.containsKey(hash)) return // metadata fetch helper torrent
-        handles[hash] = h
+        handles.remove(hash)
         h.saveResumeData(TorrentHandle.SAVE_INFO_DICT)
     }
 
@@ -338,9 +345,9 @@ class TorrentEngine(
 
     private fun toItem(meta: TorrentMeta, h: TorrentHandle): TorrentItem {
         val st = h.status()
-        val flags = st.flags()
-        val paused = flags.has(TorrentFlags.PAUSED)
-        val autoManaged = flags.has(TorrentFlags.AUTO_MANAGED)
+        val flags = flagsOf(st)
+        val paused = flags.has(F_PAUSED)
+        val autoManaged = flags.has(F_AUTO_MANAGED)
         val err = st.errorCode()
         val finished = st.isFinished
         val lt = st.state()
@@ -375,7 +382,7 @@ class TorrentEngine(
             etaSeconds = eta,
             ratio = if (downloadedEver > 0) st.allTimeUpload().toFloat() / downloadedEver else 0f,
             savePath = meta.savePath,
-            sequential = flags.has(TorrentFlags.SEQUENTIAL_DOWNLOAD),
+            sequential = flags.has(F_SEQUENTIAL),
             addedAt = meta.addedAt,
             error = if (err.isError) err.message else null,
             fileCount = fileLists[meta.hash]?.size ?: 0,
@@ -410,6 +417,7 @@ class TorrentEngine(
 
     suspend fun preview(source: AddSource): TorrentPreview {
         ensureStarted()
+        var magnetPeers: List<Pair<String, Int>> = emptyList()
         val bytes: ByteArray = when (source) {
             is AddSource.Magnet -> {
                 val params = try {
@@ -418,15 +426,17 @@ class TorrentEngine(
                     throw AddException("That doesn't look like a valid magnet link. Copy the full link and try again.")
                 }
                 val hash = params.infoHashes.best.toHex()
+                magnetPeers = runCatching { params.peers().map { it.address().toString() to it.port() } }
+                    .getOrDefault(emptyList())
                 val stored = store.torrentFile(hash)
                 if (metas.containsKey(hash) && stored.exists()) {
                     withContext(Dispatchers.IO) { stored.readBytes() }
                 } else {
                     val temp = File(context.cacheDir, "metadata").apply { mkdirs() }
                     runInterruptible(Dispatchers.IO) {
-                        session.fetchMagnet(source.uri, METADATA_TIMEOUT_S, temp)
+                        fetchMetadata(source.uri, METADATA_TIMEOUT_S, temp)
                     } ?: throw AddException(
-                        "No peers sent the torrent info within $METADATA_TIMEOUT_S seconds. " +
+                        "Couldn't get the torrent info from peers. " +
                             "Check your connection, or try a link with more seeders.",
                     )
                 }
@@ -446,7 +456,65 @@ class TorrentEngine(
             files = fileListOf(ti),
             torrentBytes = bytes,
             alreadyAdded = metas.containsKey(hash),
+            peers = magnetPeers,
         )
+    }
+
+    /**
+     * Downloads a magnet link's metadata and returns it as .torrent bytes, or null on timeout.
+     *
+     * Replaces SessionManager.fetchMagnet, which fails on v2/hybrid torrents ("a piece layer
+     * is invalid") because peers don't send piece layers with the metadata. Instead we wrap
+     * the raw info section ourselves (plus the magnet's trackers and web seeds); libtorrent
+     * fetches piece layers from peers later. Blocks; interrupt the thread to cancel.
+     */
+    private fun fetchMetadata(uri: String, timeoutS: Int, tempDir: File): ByteArray? {
+        val params = AddTorrentParams.parseMagnetUri(uri)
+        val sha = params.infoHashes.best
+        val hash = sha.toHex()
+        val trackers = runCatching { params.trackers.toList() }.getOrDefault(emptyList())
+        val webSeeds = runCatching { params.urlSeeds.toList() }.getOrDefault(emptyList())
+        val result = AtomicReference<ByteArray?>()
+        val done = CountDownLatch(1)
+        val listener = object : AlertListener {
+            override fun types(): IntArray = intArrayOf(
+                AlertType.METADATA_RECEIVED.swig(),
+                AlertType.METADATA_FAILED.swig(),
+            )
+
+            override fun alert(alert: Alert<*>) {
+                try {
+                    // The alert's handle is only valid inside this callback.
+                    val h = (alert as TorrentAlert<*>).handle()
+                    if (!h.isValid || h.infoHash().toHex() != hash) return
+                    if (alert.type() == AlertType.METADATA_RECEIVED) {
+                        val ti = h.torrentFile()
+                        if (ti != null) result.set(torrentBytes(infoSection(ti), trackers, webSeeds))
+                    }
+                    done.countDown()
+                } catch (t: Throwable) {
+                    Log.w(TAG, "metadata fetch failed", t)
+                    done.countDown()
+                }
+            }
+        }
+        session.addListener(listener)
+        try {
+            // A leftover helper from a cancelled fetch would make this add a duplicate.
+            session.find(sha)?.let { if (!metas.containsKey(hash)) session.remove(it) }
+            params.savePath = tempDir.absolutePath
+            // Start now, outside the queue, and never download file data.
+            params.flags = params.flags
+                .and_(TorrentFlags.AUTO_MANAGED.inv())
+                .and_(TorrentFlags.PAUSED.inv())
+                .or_(TorrentFlags.UPLOAD_MODE)
+            session.swig().async_add_torrent(params.swig())
+            done.await(timeoutS.toLong(), TimeUnit.SECONDS)
+        } finally {
+            session.removeListener(listener)
+            if (!metas.containsKey(hash)) session.find(sha)?.let { session.remove(it) }
+        }
+        return result.get()
     }
 
     /** Adds a torrent with the selected files. Returns its info-hash. */
@@ -459,7 +527,8 @@ class TorrentEngine(
                     for (i in selected) if (h.filePriority(i) == Priority.IGNORE) h.filePriority(i, Priority.DEFAULT)
                     if (sequential) h.setFlags(TorrentFlags.SEQUENTIAL_DOWNLOAD)
                     persistPriorities(hash, h)
-                    if (h.status().flags().has(TorrentFlags.PAUSED)) resumeHandle(h)
+                    if (isPaused(h)) resumeHandle(h)
+                    connectPeers(h, preview.peers)
                 }
                 return@withContext hash
             }
@@ -491,9 +560,53 @@ class TorrentEngine(
 
             var flags = torrent_flags_t()
             if (sequential) flags = flags.or_(TorrentFlags.SEQUENTIAL_DOWNLOAD)
-            session.download(ti, saveDir, null, priorities, null, flags)
+            val peers = preview.peers.mapNotNull { (ip, port) -> runCatching { TcpEndpoint(ip, port) }.getOrNull() }
+            session.download(ti, saveDir, null, priorities, peers, flags)
             hash
         }
+
+    /** Raw bencoded info dictionary, exactly as peers sent it (so the info-hash matches). */
+    private fun infoSection(ti: TorrentInfo): ByteArray {
+        val span = ti.swig().get_info_section()
+        val out = ByteArray(span.size().toInt())
+        for (i in out.indices) out[i] = span.at(i.toLong())
+        Reference.reachabilityFence(ti)
+        return out
+    }
+
+    /** Minimal .torrent: announce-list, info, url-list (bencode keys in sorted order). */
+    private fun torrentBytes(info: ByteArray, trackers: List<String>, webSeeds: List<String>): ByteArray {
+        fun str(s: String): ByteArray {
+            val b = s.toByteArray(Charsets.UTF_8)
+            return "${b.size}:".toByteArray() + b
+        }
+        val out = java.io.ByteArrayOutputStream()
+        out.write('d'.code)
+        if (trackers.isNotEmpty()) {
+            out.write(str("announce-list"))
+            out.write('l'.code)
+            for (t in trackers) {
+                out.write('l'.code)
+                out.write(str(t))
+                out.write('e'.code)
+            }
+            out.write('e'.code)
+        }
+        out.write(str("info"))
+        out.write(info)
+        if (webSeeds.isNotEmpty()) {
+            out.write(str("url-list"))
+            out.write('l'.code)
+            webSeeds.forEach { out.write(str(it)) }
+            out.write('e'.code)
+        }
+        out.write('e'.code)
+        return out.toByteArray()
+    }
+
+    private fun connectPeers(h: TorrentHandle, peers: List<Pair<String, Int>>) {
+        for ((ip, port) in peers) runCatching { h.swig().connect_peer(TcpEndpoint(ip, port).swig()) }
+    }
 
     /** Waits until the session has a handle for [hash]. */
     suspend fun awaitHandle(hash: String, timeoutMs: Long = 8000): Boolean {
@@ -527,7 +640,7 @@ class TorrentEngine(
         metas.keys.forEach { hash ->
             val h = handleFor(hash) ?: return@forEach
             val st = h.status()
-            if (st.flags().has(TorrentFlags.PAUSED) && !(st.isFinished && !settings.seedAfterComplete)) resumeHandle(h)
+            if (flagsOf(st).has(F_PAUSED) && !(st.isFinished && !settings.seedAfterComplete)) resumeHandle(h)
         }
         refreshSoon()
     }
@@ -553,7 +666,7 @@ class TorrentEngine(
         val h = handleFor(hash) ?: return
         h.filePriority(index, if (wanted) Priority.DEFAULT else Priority.IGNORE)
         persistPriorities(hash, h)
-        if (wanted && h.status().flags().has(TorrentFlags.PAUSED)) resumeHandle(h)
+        if (wanted && isPaused(h)) resumeHandle(h)
         h.saveResumeData()
         refreshSoon()
     }
@@ -563,7 +676,7 @@ class TorrentEngine(
         val n = infos[hash]?.numFiles() ?: return
         h.prioritizeFiles(Array(n) { if (wanted) Priority.DEFAULT else Priority.IGNORE })
         persistPriorities(hash, h)
-        if (wanted && h.status().flags().has(TorrentFlags.PAUSED)) resumeHandle(h)
+        if (wanted && isPaused(h)) resumeHandle(h)
         h.saveResumeData()
         refreshSoon()
     }
@@ -649,7 +762,7 @@ class TorrentEngine(
         if (have < size) {
             h.setFlags(TorrentFlags.SEQUENTIAL_DOWNLOAD)
             updateMeta(hash) { it.copy(sequential = true) }
-            if (h.status().flags().has(TorrentFlags.PAUSED)) {
+            if (isPaused(h)) {
                 // Streaming jumps the queue.
                 h.unsetFlags(TorrentFlags.AUTO_MANAGED)
                 h.resume()
@@ -830,10 +943,25 @@ class TorrentEngine(
         while (pendingResumeSaves.get() > 0 && System.currentTimeMillis() < deadline) Thread.sleep(50)
     }
 
-    private fun torrent_flags_t.has(flag: torrent_flags_t): Boolean = and_(flag).non_zero()
+    /**
+     * TorrentStatus.flags() returns a view into the status object's memory, so read it as a
+     * plain Int while [st] is guaranteed alive (otherwise GC can free it mid-read).
+     */
+    private fun flagsOf(st: TorrentStatus): Int {
+        val value = st.flags().to_int()
+        Reference.reachabilityFence(st)
+        return value
+    }
+
+    private fun isPaused(h: TorrentHandle): Boolean = flagsOf(h.status()).has(F_PAUSED)
+
+    private fun Int.has(flag: Int): Boolean = this and flag != 0
 
     companion object {
         private const val TAG = "TorrentEngine"
+        private val F_PAUSED = TorrentFlags.PAUSED.to_int()
+        private val F_AUTO_MANAGED = TorrentFlags.AUTO_MANAGED.to_int()
+        private val F_SEQUENTIAL = TorrentFlags.SEQUENTIAL_DOWNLOAD.to_int()
         const val METADATA_TIMEOUT_S = 90
 
         fun canonical(f: File): String = runCatching { f.canonicalPath }.getOrDefault(f.absolutePath)

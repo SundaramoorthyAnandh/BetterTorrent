@@ -34,8 +34,8 @@ import kotlin.random.Random
 class StreamServerTest {
 
     companion object {
-        private const val SEED_PORT = 46881
-        private const val LEECH_PORT = 46882
+        private const val SEED_PORT = 47881
+        private const val LEECH_PORT = 47882
         private const val FILE_SIZE = 6 * 1024 * 1024 + 12345
         private const val PIECE = 64 * 1024
 
